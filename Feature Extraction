@@ -1,1 +1,178 @@
+import statistics
+import pandas as pd
+import pymap3d as pm
+import mpu
+import geopandas as gpd
+from h3 import h3
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.express as px
+from geojson import Feature, Point, FeatureCollection, Polygon
+import plotly.express as px
+import shapely
+import json
+import hjson
+from tqdm import tqdm
+import os
+import math
+from math import sqrt
+from sklearn.metrics import mean_squared_error
+import mpu
+from scipy import ndimage
+from scipy.spatial import distance
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.model_selection import train_test_split
+from keras.models import Sequential
+from keras.layers import Dense
+from sklearn.metrics import mean_squared_error
+import math
+
+#load train and test data
+tra=pd.read_csv("main_train.csv")
+test=pd.read_csv('total_test15.csv')
+
+tra_2=tra
+tes_2=test
+
+#projections
+lat0= 39.9372616
+lon0= -0.1004465
+h0=0
+h=0
+lati1,longi1,height1=pm.enu2geodetic(tra_2.lat.values,tra_2.lon.values,h,lat0,lon0,h0,ell=None,deg=True)
+lati2,longi2,height1=pm.enu2geodetic(tes_2.lat.values,tes_2.lon.values,h,lat0,lon0,h0,ell=None,deg=True)
+tra_2["lati1"]=lati1
+tra_2["longi1"]=longi1
+tes_2["lati2"]=lati2
+tes_2["longi2"]=longi2
+tes_2= tes_2.reset_index()
+tes_2 = tes_2.drop('index', axis=1)
+plt.scatter(lati1, longi1)
+plt.scatter(lati2, longi2)
+plt.show()
+
+#Resolution
+H3_res=13
+
+#list of APs
+col1=[]
+for col in tra_2.columns:
+    col1.append(col)
+col2=col1[0:620]
+
+#cluster train in h3_cells
+def geo_to_h3(row):
+    return h3.geo_to_h3(lat=row.lati1,lng=row.longi1,resolution=H3_res)
+tra_2["h3_cell"]=tra_2.apply(geo_to_h3,axis=1)
+tra_2
+
+
+#floor subset
+tra_2=tra_2[ tra_2['floor']== 5]
+#tra_2=tra_2[tra_2['h3_cell']=='8d3954b1938c73f']
+#floor_subset test data
+H3_res=13
+
+#cluster train and test in h3_cells
+def geo_to_h3(row):
+    return h3.geo_to_h3(lat=row.lati2,lng=row.longi2,resolution=H3_res)
+tes_2["h3_cell"]=tes_2.apply(geo_to_h3,axis=1)
+tes_2=tes_2[ tes_2['floor']== 5]
+tes_2=tes_2#[tes_2['h3_cell']== '8d3954b1938c0ff']
+tes_2= tes_2.reset_index()
+tes_2 = tes_2.drop('index', axis=1)
+
+
+#lists of longi1 and lati1
+lati1_a=tra_2['lati1'].to_list()
+longi1_a=tra_2['longi1'].to_list()
+x_s=[]
+for i in range(len(tra_2)):
+            x_s1=[lati1_a[i],longi1_a[i]]
+            x_s.append(x_s1)
+ 
+#Calculate Stats of H3_cells    
+train_Ap_Stats=pd.DataFrame(columns=["h3_cell","value","Median","Min","Max","Stdev","count_value","AP"])
+for item in col2:
+     tra3=tra_2[[item,"h3_cell"]]
+     tra4=tra3[tra3[item]<-30]
+     tra4.columns = ['value',"h3_cell"]
+     if len(tra4)>0:
+           tra5=(tra4    
+                      .groupby("h3_cell")
+                      .value
+                      .agg(list)
+                      .to_frame("value")
+                      .reset_index())
+           tra5["Range"]=tra5.value.apply(lambda x:[min(x),max(x)])
+           tra5["Median"]=tra5.value.apply(lambda x: statistics.median(x))
+           tra5[["Min","Max"]]=pd.DataFrame(tra5["Range"].tolist(),index=tra5.index)
+           tra5["Stdev"]=tra5.value.apply(lambda x:np.std(x))
+           tra5["count_value"]=(tra5["value"]
+                     .apply(lambda value:len(value)))
+           tra5["AP"]= item
+           train_Ap_Stats=train_Ap_Stats.append(tra5)
+train_Ap_Stats= train_Ap_Stats.reset_index()
+train_Ap_Stats = train_Ap_Stats.drop('index', axis=1)
+train_Ap_Stats
+
+#groupby h3 cells with AP counts
+f_g=(train_Ap_Stats    
+               .groupby('h3_cell')
+               .AP
+               .agg(list)
+               .to_frame("AP")
+               .reset_index())
+f_g["count_AP"]=(f_g["AP"]
+                       .apply(lambda AP:len(AP)))
+fg=f_g.sort_values("count_AP",ascending=False)
+train_Ap_Stats2=train_Ap_Stats.merge(fg,left_on='h3_cell',right_on='h3_cell')
+train_Aps_Stats3=train_Ap_Stats.loc[train_Ap_Stats['count_value']>=2]
+train_Aps_Stats3=train_Aps_Stats3.sort_values("count_value",ascending=False)
+#display
+from shapely.geometry import Polygon
+def add_geometry(row):
+  points = h3.h3_to_geo_boundary(row['h3_cell'], True)
+  return Polygon(points)
+#Apply function into our dataframe
+fg['geometry'] = (fg
+                                .apply(add_geometry,axis=1))
+a=fg["h3_cell"][0]
+def hexagons_dataframe_to_geojson(df_hex, hex_id_field,geometry_field, value_field,file_output = None):
+  
+      list_features = []
+  
+      for i, row in df_hex.iterrows():
+          feature = Feature(geometry = row[geometry_field],
+                            id = row[hex_id_field],
+                            properties = {"value": row[value_field]})
+          list_features.append(feature)
+  
+      feat_collection = FeatureCollection(list_features)
+  
+      if file_output is not None:
+          with open(file_output, "w") as f:
+              json.dump(feat_collection, f)
+  
+      else :
+        return feat_collection
+geojson_obj = (hexagons_dataframe_to_geojson
+                (fg,
+                 hex_id_field='h3_cell',
+                 value_field='count_AP',
+                 geometry_field='geometry'))
+lat2,lon2=h3.h3_to_geo(a)
+fig = (px.choropleth_mapbox(
+                    fg, 
+                    geojson=geojson_obj, 
+                    locations='h3_cell', 
+                    color='count_AP',
+                    color_continuous_scale="Viridis",
+                    range_color=(0,fg['count_AP'].mean()           ),                  mapbox_style='carto-positron',
+                    zoom=16,
+                    center = {"lat": lat2, "lon": lon2},
+                    opacity=0.7,
+                    labels={'count_AP':'# APs count '}))
+fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+fig.show()
 
