@@ -1,1 +1,128 @@
+start = time.time()
+error1=[]
+error2=[]
+error3=[]
+tot_ap=[]
+exp_last=[]
+exp_losn=[]
+real_last=[]
+real_losn=[]
+# spsd=[]
+# matched_cell=[]
+# mat_diff=[]
+# mat_max=[]
+# mat_min=[]
+# max_min=[]
+#for j in tqdm(s1):
+for j in tqdm(range(it)):
+              #load test fps
+              test_1=tes_2.iloc[[j]]   
+               #test fps real location
+              val_lat=test_1['lati2'].values[0]
+              val_lon=test_1['longi2'].values[0]  
+              val=test_1.loc[j, :].values.tolist()
+            
+              Rssi=val[0:620]
+              test_ap_point=pd.DataFrame()
+              test_ap_point["Rssi"]=Rssi
+              test_ap_point['Ap']=col2
+              test_ap_point=test_ap_point.loc[test_ap_point["Rssi"]<100]
+              tot_ap.append(len(test_ap_point))
+            
+            
+            
+            
+            # Extract the features of test point's APs in train set
+              AP1_train_rows=train_Aps_Stats3[train_Aps_Stats3.AP.isin(test_ap_point['Ap'])]
+             #The RSSI range Based selection criteria
+              AP1_train_rows1=AP1_train_rows.merge(test_ap_point,left_on='AP',right_on='Ap')
+              AP1_train_rows1= AP1_train_rows1[ AP1_train_rows1['Max']> AP1_train_rows1['Rssi']]
+              AP1_train_rows1= AP1_train_rows1[ AP1_train_rows1['Min']< AP1_train_rows1['Rssi']]
+              AP1_train_rows1=AP1_train_rows1.reset_index()
+              #count the no. of APs in each H3 cell
+              f_g1=(AP1_train_rows1    
+                                 .groupby('h3_cell')
+                                 .Ap
+                                 .agg(list)
+                                 .to_frame("Ap")
+                                 .reset_index())
+              f_g1["count"]=(f_g1["Ap"]
+                                 .apply(lambda Ap:len(Ap)))
+                
+             #Find the location coordinates of H3 cells
 
+              b=f_g1['h3_cell'].to_list()
+              lati4=[]
+              longi4=[]
+              for item in b:
+                                 latt,lonn=h3.h3_to_geo(item)
+                                 lati4.append(latt)
+                                 longi4.append(lonn)    
+              f_g1['lati4']=lati4
+              f_g1['longi4']=longi4
+              f_g1=f_g1.sort_values("count",ascending=False)
+              # take the projection of H3 cell 
+              es_o,nu_o,hig=pm.geodetic2enu(lati4,longi4,h,lat0,lon0,h0,ell=None,deg=True)
+              f_g1['es_o']=es_o
+              f_g1['nu_o']=nu_o
+              f_g1=f_g1.reset_index()
+              
+              #Find the absolute Manhattan distance
+              AP1_train_rows1['diff_']=abs( AP1_train_rows1["Median"]- AP1_train_rows1['Rssi'])
+              AP1_train_rows1= AP1_train_rows1.rename(columns={'count_value':'count_'})
+              if(len( AP1_train_rows1)>0):
+                                #Drop cells where, common Aps (cell,test_fp) >99 percentile
+                                AP1_train_rows2= AP1_train_rows1.groupby(['h3_cell']).size().reset_index(name='match')
+                                C3_per= AP1_train_rows2['match'].quantile(0.99)
+                                AP1_train_rows2= AP1_train_rows2[ AP1_train_rows2['match']>=C3_per]
+                                if(len( AP1_train_rows2)>0):
+                                                AP1_train_rows2= AP1_train_rows2.rename(columns={'h3_cell':'h3_cell_x'})
+                                                AP1_train_rows2=AP1_train_rows2.sort_values("match",ascending=False)
+                                                AP1_train_rows3= AP1_train_rows1.merge( AP1_train_rows2,left_on='h3_cell',right_on='h3_cell_x')
+                                                AP1_train_rows3['dff_1']=(( AP1_train_rows3['Rssi']- AP1_train_rows3['Median'])**2)* AP1_train_rows3['count_']/(( AP1_train_rows3['count_'].sum()))
+                                                AP1_train_rows4= AP1_train_rows3.groupby(['h3_cell_x'])['count_'].sum().reset_index(name='sum_count_') 
+                                                AP1_train_rows5= AP1_train_rows3.groupby(['h3_cell_x'])['diff_'].sum().reset_index(name='sum_diff_')
+                                                AP1_train_rows6= AP1_train_rows3.groupby(['h3_cell_x'])['dff_1'].sum().reset_index(name='sum_dff_1')
+                                                AP1_train_rows7=AP1_train_rows4.merge(AP1_train_rows3,left_on='h3_cell_x',right_on='h3_cell_x')
+                                                AP1_train_rows8=AP1_train_rows5.merge(AP1_train_rows7,left_on='h3_cell_x',right_on='h3_cell_x')
+                                                AP1_train_rows9=AP1_train_rows6.merge(AP1_train_rows8,left_on='h3_cell_x',right_on='h3_cell_x')
+                                                #Drop cells where Normalized Manhattan > 1
+                                                AP1_train_rows9['sum2']= AP1_train_rows9['sum_diff_']/AP1_train_rows9['match']
+                                                C5_per=AP1_train_rows9['sum2'].quantile(1)
+                                                AP1_train_rows9.drop(AP1_train_rows9[AP1_train_rows9['sum2']>C5_per].index,inplace=True)  
+
+              f_g9=(AP1_train_rows9    
+                            .groupby('h3_cell')
+                            .Ap
+                            .agg(list)
+                            .to_frame("Ap")
+                            .reset_index())
+              f_g9["count"]=(f_g9["Ap"]
+                              .apply(lambda Ap:len(Ap)))           
+              AP1_train_rows9['div']=AP1_train_rows9['sum_dff_1']/AP1_train_rows9['sum_count_']
+              AP1_train_rows9['ex']=-AP1_train_rows9['div']**2
+              AP1_train_rows9['W']=np.exp(AP1_train_rows9['ex'].astype(float))
+              AP1_train_rows9["lat_lon"]=AP1_train_rows9['h3_cell_x'].apply(lambda x: h3.h3_to_geo(x))
+              AP1_train_rows9[['lat_','lon_']]=pd.DataFrame(AP1_train_rows9['lat_lon'].tolist(),index=AP1_train_rows9.index)
+              AP1_train_rows9["exp_lat1"]=AP1_train_rows9["lat_"]*AP1_train_rows9.W
+              AP1_train_rows9["exp_lon1"]=AP1_train_rows9["lon_"]*AP1_train_rows9.W
+              exp_lat=(AP1_train_rows9["exp_lat1"].sum())/(AP1_train_rows9["W"].sum())
+              exp_lon=(AP1_train_rows9["exp_lon1"].sum())/(AP1_train_rows9["W"].sum())
+              exp_pos=exp_lat,exp_lon
+              exp_last.append(exp_lat)
+              exp_losn.append(exp_lon)
+              
+              #Real Position
+              real_pos=val_lat,val_lon 
+              real_last.append(val_lat)
+              real_losn.append(val_lon) 
+                            
+              #Error Calculation by using projection
+
+              error_1=mpu.haversine_distance(exp_pos,real_pos)
+              error1.append(error_1)
+              
+
+end = time.time()
+print("The time of execution of above program is :",
+      (end-start) * 10**3, "ms")
