@@ -4,7 +4,8 @@ from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-tes_51=tes_2[tes_2['h3_cell']== '8d3954b1938c07f']
+#Load test fingerprints in H3-cell
+tes_51=tes_2[tes_2['h3_cell']== ' ']
 tes_51= tes_51.reset_index()
 tes_51 = tes_51.drop('index', axis=1)
 y_test=tes_51[['lat', 'lon']]
@@ -12,12 +13,13 @@ y_test=tes_51[['lat', 'lon']]
 X_test=tes_51.drop(columns=['lat', 'lon','floor','lati2', 'longi2','h3_cell'])
 #y_test=yy1.to_numpy()
 
-#train_Set
+#train_Set, where r1 is a cluster of neighboring h3-cells
 tra_3=tra_2[tra_2['h3_cell'].isin(r1)]
 y1=tra_3[['lat', 'lon']]
 y2=y1.to_numpy()
 X1=tra_3.drop(columns=['lat', 'lon','floor','lati1', 'longi1','h3_cell'])
 X2=X1.to_numpy()
+
 # Train/test split
 X_train, X_eval, y_train, y_eval = train_test_split(X1, y1, test_size=0.001, random_state=33)
 
@@ -29,7 +31,7 @@ mor = MultiOutputRegressor(svr)
 
 # Train the regressor
 mor = mor.fit(X_train, y_train)
-start=time.time()
+
 Predictions5=mor.predict(X_test)
 dataframe=pd.DataFrame(Predictions5, columns=['lat','lon']) 
 lat0= 39.9372616
@@ -41,9 +43,8 @@ dataframe["e5"]=e5
 dataframe["n5"]=n5
 dataframe=dataframe.drop(columns=['lat', 'lon'])
 Predictions2=dataframe.to_numpy()
-end = time.time()
-print("The time of execution of above program is :",
-      (end-start) * 10**3, "ms")
+
+
 tess=tes_51[['lati2','longi2']]
 tess=tess.to_numpy()
 mse = mean_squared_error(Predictions2, tess)
