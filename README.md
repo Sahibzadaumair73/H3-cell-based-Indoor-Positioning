@@ -8,6 +8,11 @@ points and 106 test points.
 Source of dataset 2: https://zenodo.org/records/3748719
 This is a hetrogenous Wi-Fi fingerprinting dataset that covers three buildings in different cities of china. Each building contains many floors.
 # How to Use
-
+download the dataset from the source link
+prepare the train and test files in .csv format
+use the feature extraction coding to extract the features from the dataset. 
+use the code in coarse positioning file to find the corase location H3-cell.
+add the neighboring H3-cells data in the corase location H3-cell as the training set for ssupport vector regressor. 
+use the fine positioning code to find the user's file location in the pre-selected sub-area. 
 
 
