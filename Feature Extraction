@@ -68,12 +68,12 @@ tra_2
 
 
 #floor subset
-tra_2=tra_2[ tra_2['floor']== 5]
+#tra_2=tra_2[ tra_2['floor']== 5]
 #tra_2=tra_2[tra_2['h3_cell']==' ']
 #floor_subset test data
 H3_res=13
 
-#cluster train and test in h3_cells
+#cluster test in h3_cells
 def geo_to_h3(row):
     return h3.geo_to_h3(lat=row.lati2,lng=row.longi2,resolution=H3_res)
 tes_2["h3_cell"]=tes_2.apply(geo_to_h3,axis=1)
