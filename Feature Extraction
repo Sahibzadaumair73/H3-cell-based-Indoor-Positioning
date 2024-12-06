@@ -28,8 +28,8 @@ from sklearn.metrics import mean_squared_error
 import math
 
 #load train and test data
-tra=pd.read_csv("main_train.csv")
-test=pd.read_csv('total_test15.csv')
+tra=pd.read_csv(" ")
+test=pd.read_csv(' ')
 
 tra_2=tra
 tes_2=test
@@ -69,7 +69,7 @@ tra_2
 
 #floor subset
 tra_2=tra_2[ tra_2['floor']== 5]
-#tra_2=tra_2[tra_2['h3_cell']=='8d3954b1938c73f']
+#tra_2=tra_2[tra_2['h3_cell']==' ']
 #floor_subset test data
 H3_res=13
 
@@ -78,7 +78,7 @@ def geo_to_h3(row):
     return h3.geo_to_h3(lat=row.lati2,lng=row.longi2,resolution=H3_res)
 tes_2["h3_cell"]=tes_2.apply(geo_to_h3,axis=1)
 tes_2=tes_2[ tes_2['floor']== 5]
-tes_2=tes_2#[tes_2['h3_cell']== '8d3954b1938c0ff']
+tes_2=tes_2#[tes_2['h3_cell']== ' ']
 tes_2= tes_2.reset_index()
 tes_2 = tes_2.drop('index', axis=1)
 
